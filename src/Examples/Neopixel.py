@@ -2,10 +2,8 @@ from machine import Pin
 import time
 from neopixel import NeoPixel
 
-# 네오픽셀 핀 초기화
 np0 = NeoPixel(machine.Pin(21), 1)
 
-# 네오픽셀 상태를 추적하는 변수 초기화 
 def np_on():
     for i in range(0, np0.n):
         np0[i] = (255,0,0)
@@ -17,11 +15,11 @@ def np_off():
 
 while True:
     # 네오픽셀 켜기
-    #np_on()
-    #time.sleep(1)
-    # 네오픽셀 끄기
-    np_off()
+    np_on()
     time.sleep(1)
+    # 네오픽셀 끄기
+    #np_off()
+    #time.sleep(1)
 
 
 
