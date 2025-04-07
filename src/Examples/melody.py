@@ -1,27 +1,41 @@
-from machine import Pin, PWM
-from utime import sleep
+from machine import Pin, PWM  # 버저를 제어하기 위한 라이브러리 가져오기
+from utime import sleep  # 노트 사이에 지연을 만들기 위한 sleep 함수 가져오기
+import notes  # 음표에 대한 주파수 값을 포함하는 모듈 가져오기
 
-# GPIO 22번 핀에 부저를 PWM 모드로 설정합니다.
+# 22번 핀에 버저 초기화
 buzzer = PWM(Pin(22))
-buzzer.duty_u16(30000)       # 세기 설정
 
-# 다양한 음을 연주하기 위한 주파수와 길이 설정
-melody = [
-    (262, 0.5),  # 도(C)
-    (294, 0.5),  # 레(D)
-    (330, 0.5),  # 미(E)
-    (349, 0.5),  # 파(F)
-    (392, 0.5),  # 솔(G)
-    (440, 0.5),  # 라(A)
-    (494, 0.5),  # 시(B)
-    (523, 0.5)   # 높은 도(C)
+# 멜로디(노래) 정의, "P"는 쉬는 부분을 의미
+song = [
+    "E5", "E5", "P", "E5", "P", "C5", "E5", "P", "G5", "P", "P", "P", "G4", "P", "P", "P",
+    "C5", "P", "P", "G4", "P", "P", "E4", "P", "P", "A4", "P", "B4", "P", "AS4", "A4",
+    "G4", "E5", "G5", "A5", "F5", "G5", "P", "E5", "C5", "D5", "B4", "P", "P",
+    "C5", "P", "P", "G4", "P", "P", "E4", "P", "P", "A4", "P", "B4", "P", "AS4", "A4",
+    "G4", "E5", "G5", "A5", "F5", "G5", "P", "E5", "C5", "D5", "B4", "P", "P"
 ]
 
-# 멜로디 연주
-buzzer.freq(262, 0.5)        # 음 설정
-buzzer.duty_u16(0)           # 소리 끄기
-sleep(0.1)                   # 음 사이의 짧은 휴지
-buzzer.freq(294, 0.5)        # 음 설정
-sleep(duration)              # 음 지속 시간
-buzzer.duty_u16(0)           # 소리 끄기
-sleep(0.1)                   # 음 사이의 짧은 휴지
+# 음표를 재생하는 함수
+def playtone(frequency):
+    if frequency == 0:  # 주파수가 0일 때(쉼표)
+        buzzer.duty_u16(0)
+    else:
+        buzzer.duty_u16(3000)  # 소리의 크기(볼륨) 설정
+        buzzer.freq(frequency)  # 주파수 설정
+
+# 소리를 끄는 함수
+def bequiet():
+    buzzer.duty_u16(0)
+
+# 노래를 재생하는 함수
+def playsong(mysong):
+    for note in mysong:
+        if note == "P":  # 쉼표일 때
+            bequiet()
+        else:
+            playtone(notes.tones[note])  # 음표 재생
+        sleep(0.2)  # 노트 사이의 지연 (속도 설정 부분)
+    bequiet()
+
+# 메인 함수 실행
+playsong(song)
+
