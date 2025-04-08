@@ -1,7 +1,6 @@
-from machine import Pin, I2C
+from machine import Pin
 import neopixel
 import time
-import ahtx0
 
 led = Pin('LED', Pin.OUT)
 
