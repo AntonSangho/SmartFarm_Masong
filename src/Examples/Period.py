@@ -10,19 +10,13 @@ np0 = neopixel.NeoPixel(Pin(21), 12)  # LED 설정
 
 def np_on():
    for i in range(0, np0.n):
-       np0[i] = (255,0,0)  # 빨간색으로 설정
+       np0[i] = (130,30,235)  # 성장기 색으로 설정
    np0.write()
 
 def np_off():
    for i in range(0, np0.n):
        np0[i] = (0,0,0)  # LED 끄기
    np0.write()
-
-# 온습도 센서와 통신 설정
-i2c = I2C(1, scl=Pin(15), sda=Pin(14), freq=400_000)
-
-# 온습도 센서와 RTC 센서 연결
-sensor = ahtx0.AHT20(i2c)
 
 # 버튼 설정 (실제 사용하는 핀 번호로 변경하세요)
 button = Pin(20, Pin.IN, Pin.PULL_UP)
