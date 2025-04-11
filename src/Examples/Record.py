@@ -2,23 +2,21 @@ import time, machine
 from ds3231_port import DS3231
 from machine import I2C, Pin
 import ahtx0
+from bh1750 import BH1750
 
-# 컴퓨터 시간과 통신을 설정합니다.
 i2c0 = machine.I2C(0, scl=machine.Pin(5), sda=machine.Pin(4), freq=400000)
 rtc = DS3231(i2c0)
+
+bh1750 = BH1750(0x23, i2c0)
     
-# 온습도 센서과 통신을 설정합니다. 
-i2c = I2C(1, scl=Pin(15), sda=Pin(14), freq=400_000)
+i2c1 = I2C(1, scl=Pin(15), sda=Pin(14), freq=400_000)
 
-# 온습도 센서와 RTC 센서를 연결합니다.
-sensor = ahtx0.AHT20(i2c)
+sensor = ahtx0.AHT20(i2c1)
 
-#데이터를 기록할 파일을 생성합니다.
 f = open('data.csv', 'a')
-# 파일에 시간, 온도, 습도 순서로 기록합니다.
-f.write("Time, Temperature, Humidity\n")
+f.write("Time, Temperature, Humidity, Light\n")
 
-print("ATH21의 온도와 습도를 측정합니다.")
+print("ATH21의 온도와 습도, BH1750의 조도를 측정합니다.")
 
 
 def record_data():
@@ -26,18 +24,24 @@ def record_data():
         now = rtc.get_time()
         humidity = sensor.relative_humidity
         temperature = sensor.temperature
+        light = bh1750.measurement  # 조도 값을 측정합니다.
+        
         # format: 년도, 월, 일, 시간, 분, 초 
         print("Time: {}/{}/{} {}:{}:{}".format(now[0], now[1], now[2], now[3], now[4], now[5]))
         print("Humidity: {:.2f}%".format(humidity))
         print("Temperature: {:.2f}C".format(temperature))
-        # 시간, 분, 초, 온도, 습도를 파일에 저장합니다.
-        f.write("{}/{}/{} {}:{}:{}, {:.2f}, {:.2f}\n".format(now[0], now[1], now[2], now[3], now[4], now[5], temperature, humidity))
+        print("Light: {:.2f} lux".format(light))  # 조도 값 출력
+        
+        # 시간, 분, 초, 온도, 습도, 조도를 파일에 저장합니다.
+        f.write("{}/{}/{} {}:{}:{}, {:.2f}, {:.2f}, {:.2f}\n".format(
+            now[0], now[1], now[2], now[3], now[4], now[5], 
+            temperature, humidity, light))  # 조도 값 추가
+            
         # 기록 주기를 1초로 설정합니다.
         time.sleep(1)
 
 try:
     record_data()
-# stop를 눌러서 프로그램 종료하기
 except KeyboardInterrupt:
     pass
 finally:
