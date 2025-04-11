@@ -31,7 +31,7 @@ np0 = neopixel.NeoPixel(Pin(21), 12)  # LED 설정
 
 def np_on():
    for i in range(0, np0.n):
-       np0[i] = (130,30,235)  # 성장기 색으로 설정
+       np0[i] = (80,40,220)  # 성장기 색으로 설정
    np0.write()
 
 def np_off():
