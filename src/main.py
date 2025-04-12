@@ -32,15 +32,15 @@ i2c1 = I2C(1, scl=Pin(15), sda=Pin(14), freq=400_000)
 sensor = ahtx0.AHT20(i2c1)
 
 # 기록 간격 설정 (30분 = 1800초)
-recording_interval = 1800
+recording_interval = 1
 last_record_time = 0
 data_file = None
 
 # LED 조명 켜기/끄기 시간 설정 (24시간 형식)
 # 이 값을 직접 수정하여 LED 켜기/끄기 시간을 변경할 수 있습니다
 light_on_hour = 19    # LED 켜는 시간 (시)
-light_on_minute = 6  # LED 켜는 시간 (분)
-light_off_hour = 6   # LED 끄는 시간 (시)
+light_on_minute = 6   # LED 켜는 시간 (분)
+light_off_hour = 6    # LED 끄는 시간 (시)
 light_off_minute = 0  # LED 끄는 시간 (분)
 
 # LED 색상 설정
@@ -70,7 +70,7 @@ def np_off():
         np0[i] = (0, 0, 0)  # LED 끄기 (검은색)
     np0.write()  # LED에 변경사항 적용
 
-# 현재 시간이 LED를 켜야 할 시간인지 확인
+# 현재 시간이 LED를 켜야 할 시간인지 확인 (하루를 넘어가는 경우도 처리)
 def is_light_on_time():
     now = rtc.get_time()  # 현재 시간 가져오기
     current_hour = now[3]  # 현재 시간 (시)
@@ -83,8 +83,38 @@ def is_light_on_time():
     on_time_in_minutes = light_on_hour * 60 + light_on_minute
     off_time_in_minutes = light_off_hour * 60 + light_off_minute
     
-    # LED 켜는 시간부터 끄는 시간 전까지만 켜기
-    return on_time_in_minutes <= current_time_in_minutes < off_time_in_minutes
+    # 하루를 넘어가는 경우 (켜는 시간이 끄는 시간보다 크거나 같은 경우)
+    # 예: 켜는 시간 19:00, 끄는 시간 06:00인 경우
+    if on_time_in_minutes >= off_time_in_minutes:
+        # 현재 시간이 켜는 시간 이후이거나 끄는 시간 이전이면 켜짐
+        return current_time_in_minutes >= on_time_in_minutes or current_time_in_minutes < off_time_in_minutes
+    else:
+        # 일반적인 경우 (같은 날에 켜고 끄는 경우)
+        return on_time_in_minutes <= current_time_in_minutes < off_time_in_minutes
+
+# 현재 시간 디버깅 출력 함수
+def print_current_time():
+    now = rtc.get_time()  # 현재 시간 가져오기
+    print("현재 시간: {:04d}/{:02d}/{:02d} {:02d}:{:02d}:{:02d}".format(
+        now[0], now[1], now[2], now[3], now[4], now[5]))
+    
+    # 켜는/끄는 시간 분단위로 변환
+    current_hour = now[3]  # 현재 시간 (시)
+    current_minute = now[4]  # 현재 시간 (분)
+    current_time_in_minutes = current_hour * 60 + current_minute
+    on_time_in_minutes = light_on_hour * 60 + light_on_minute
+    off_time_in_minutes = light_off_hour * 60 + light_off_minute
+    
+    print("현재 시간(분): {}, 켜는 시간(분): {}, 끄는 시간(분): {}".format(
+        current_time_in_minutes, on_time_in_minutes, off_time_in_minutes))
+    
+    # 하루를 넘어가는 경우 표시
+    if on_time_in_minutes >= off_time_in_minutes:
+        print("하루를 넘어가는 설정입니다 (밤->아침)")
+    else:
+        print("같은 날 내에서 설정되었습니다")
+        
+    print("LED 켜야 하나요? {}".format(is_light_on_time()))
 
 # 버튼 눌렀을 때 짧은 부저음
 def button_buzzer(freq):
@@ -124,7 +154,8 @@ def record_data():
     light = bh1750.measurement
     
     # 측정값 출력
-    print("Time: {}/{}/{} {}:{}:{}".format(now[0], now[1], now[2], now[3], now[4], now[5]))
+    print("Time: {:04d}/{:02d}/{:02d} {:02d}:{:02d}:{:02d}".format(
+        now[0], now[1], now[2], now[3], now[4], now[5]))
     print("Humidity: {:.2f}%".format(humidity))
     print("Temperature: {:.2f}C".format(temperature))
     print("Light: {:.2f} lux".format(light))
@@ -144,7 +175,7 @@ def record_data():
     if current_time - last_record_time >= recording_interval:
         try:
             # 파일에 데이터 기록
-            data_file.write("{}/{}/{} {}:{}:{}, {:.2f}, {:.2f}, {:.2f}\n".format(
+            data_file.write("{:04d}/{:02d}/{:02d} {:02d}:{:02d}:{:02d}, {:.2f}, {:.2f}, {:.2f}\n".format(
                 now[0], now[1], now[2], now[3], now[4], now[5], 
                 temperature, humidity, light))
             
@@ -160,14 +191,13 @@ def record_data():
         except Exception as e:
             print("데이터 기록 중 오류 발생:", e)
 
-
-
 #--------- 메인 프로그램 ---------#
 
 # 상태 변수 초기화
 recording_active = False  # 기록 활성화 상태
 button_pressed = False    # 버튼 상태 추적
 last_light_check = 0      # 마지막으로 조명 상태를 확인한 시간
+light_status = False      # LED 상태 추적 (True: 켜짐, False: 꺼짐 또는 대기)
 
 # 시작 시 설정
 np_off()                  # 네오픽셀 끄기
@@ -178,8 +208,11 @@ start_buzzer()            # 시작 멜로디 재생
 print("프로그램이 시작되었습니다.")
 print("온습도,조도를 측정합니다.")
 print("버튼을 누르면 기록과 네오픽셀이 시작/중지됩니다.")
-print("현재 LED 켜는 시간: {}시 {}분, 끄는 시간: {}시 {}분".format(
+print("현재 LED 켜는 시간: {:02d}시 {:02d}분, 끄는 시간: {:02d}시 {:02d}분".format(
     light_on_hour, light_on_minute, light_off_hour, light_off_minute))
+
+# 시작할 때 현재 시간과 LED 상태 확인
+print_current_time()
 
 try:
     # 메인 루프
@@ -193,13 +226,10 @@ try:
             
             if recording_active:
                 print("기록이 시작되었습니다.")
-                # LED 상태를 시간에 따라 설정
-                if is_light_on_time():
-                    np_on()  # 네오픽셀 켜기
-                    print("네오픽셀이 켜졌습니다 (LED 켜는 시간대)")
-                else:
-                    np_standby()  # 네오픽셀 대기 모드
-                    print("네오픽셀이 대기 모드입니다 (LED 끄는 시간대)")
+                # LED 상태를 시간에 따라 즉시 설정 (현재 시간 바로 확인)
+                print_current_time()  # 디버깅을 위해 현재 시간 출력
+                current_time = time.time()
+                last_light_check = current_time - 10  # 강제로 LED 상태 업데이트 발생시키기
                 
                 button_buzzer(2000)   # 시작 부저음 (높은 음)
                 
@@ -236,15 +266,27 @@ try:
             # 데이터 기록
             record_data()
             
-            # 5초마다 시간에 따라 LED 상태 업데이트
+            # 1초마다 시간에 따라 LED 상태 업데이트 (더 빠른 응답성)
             current_time = time.time()
-            if current_time - last_light_check >= 5:
+            if current_time - last_light_check >= 1:  # 5초에서 1초로 변경
                 if is_light_on_time():
                     # LED 켜는 시간 - LED 끄는 시간 사이면 모든 LED 켜기
                     np_on()
+                    # 상태가 변경되었을 때만 메시지 출력
+                    if not light_status:
+                        print("네오픽셀이 켜졌습니다 (LED 켜는 시간대: {:02d}:{:02d}-{:02d}:{:02d})".format(
+                            light_on_hour, light_on_minute, light_off_hour, light_off_minute))
+                        print_current_time()  # 디버깅을 위해 현재 시간 출력
+                        light_status = True
                 else:
                     # 그 외 시간은 대기 모드 (첫 LED만 빨간색)
                     np_standby()
+                    # 상태가 변경되었을 때만 메시지 출력
+                    if light_status:
+                        print("네오픽셀이 대기 모드입니다 (LED 끄는 시간대: {:02d}:{:02d}-{:02d}:{:02d})".format(
+                            light_off_hour, light_off_minute, light_on_hour, light_on_minute))
+                        print_current_time()  # 디버깅을 위해 현재 시간 출력
+                        light_status = False
                 last_light_check = current_time
         
         time.sleep(1)  # 1초 대기
