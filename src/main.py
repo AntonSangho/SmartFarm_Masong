@@ -32,23 +32,59 @@ i2c1 = I2C(1, scl=Pin(15), sda=Pin(14), freq=400_000)
 sensor = ahtx0.AHT20(i2c1)
 
 # 기록 간격 설정 (30분 = 1800초)
-recording_interval = 30
+recording_interval = 1800
 last_record_time = 0
 data_file = None
 
+# LED 조명 켜기/끄기 시간 설정 (24시간 형식)
+# 이 값을 직접 수정하여 LED 켜기/끄기 시간을 변경할 수 있습니다
+light_on_hour = 19    # LED 켜는 시간 (시)
+light_on_minute = 6  # LED 켜는 시간 (분)
+light_off_hour = 6   # LED 끄는 시간 (시)
+light_off_minute = 0  # LED 끄는 시간 (분)
+
+# LED 색상 설정
+LED_COLOR = (80, 40, 220)  # 성장기에 좋은 색으로 설정 (보라색)
+LED_STANDBY_COLOR = (255, 0, 0)  # 대기 상태일 때 색상 (빨간색)
+
 #--------- 기능 함수 정의 ---------#
 
-# 네오픽셀 켜기
+# 네오픽셀 켜기 (전체)
 def np_on():
-   for i in range(0, np0.n):
-       np0[i] = (80,40,220)  # 성장기에 좋은 색으로 설정 (보라색)
-   np0.write()  # LED에 변경사항 적용
+    for i in range(0, np0.n):
+        np0[i] = LED_COLOR  # 성장기에 좋은 색으로 설정 (보라색)
+    np0.write()  # LED에 변경사항 적용
 
-# 네오픽셀 끄기
+# 네오픽셀 끄기 (대기 모드: 첫 번째만 빨간색)
+def np_standby():
+    for i in range(0, np0.n):
+        if i == 0:  # 첫 번째 LED만 빨간색으로 설정
+            np0[i] = LED_STANDBY_COLOR
+        else:
+            np0[i] = (0, 0, 0)  # 나머지 LED는 끄기
+    np0.write()  # LED에 변경사항 적용
+
+# 네오픽셀 완전히 끄기
 def np_off():
-   for i in range(0, np0.n):
-       np0[i] = (0,0,0)  # LED 끄기 (검은색)
-   np0.write()  # LED에 변경사항 적용
+    for i in range(0, np0.n):
+        np0[i] = (0, 0, 0)  # LED 끄기 (검은색)
+    np0.write()  # LED에 변경사항 적용
+
+# 현재 시간이 LED를 켜야 할 시간인지 확인
+def is_light_on_time():
+    now = rtc.get_time()  # 현재 시간 가져오기
+    current_hour = now[3]  # 현재 시간 (시)
+    current_minute = now[4]  # 현재 시간 (분)
+    
+    # 현재 시간을 분 단위로 변환 (예: 8시 30분 -> 510분)
+    current_time_in_minutes = current_hour * 60 + current_minute
+    
+    # 켜는 시간과 끄는 시간을 분 단위로 변환
+    on_time_in_minutes = light_on_hour * 60 + light_on_minute
+    off_time_in_minutes = light_off_hour * 60 + light_off_minute
+    
+    # LED 켜는 시간부터 끄는 시간 전까지만 켜기
+    return on_time_in_minutes <= current_time_in_minutes < off_time_in_minutes
 
 # 버튼 눌렀을 때 짧은 부저음
 def button_buzzer(freq):
@@ -124,11 +160,14 @@ def record_data():
         except Exception as e:
             print("데이터 기록 중 오류 발생:", e)
 
+
+
 #--------- 메인 프로그램 ---------#
 
 # 상태 변수 초기화
 recording_active = False  # 기록 활성화 상태
 button_pressed = False    # 버튼 상태 추적
+last_light_check = 0      # 마지막으로 조명 상태를 확인한 시간
 
 # 시작 시 설정
 np_off()                  # 네오픽셀 끄기
@@ -139,6 +178,8 @@ start_buzzer()            # 시작 멜로디 재생
 print("프로그램이 시작되었습니다.")
 print("온습도,조도를 측정합니다.")
 print("버튼을 누르면 기록과 네오픽셀이 시작/중지됩니다.")
+print("현재 LED 켜는 시간: {}시 {}분, 끄는 시간: {}시 {}분".format(
+    light_on_hour, light_on_minute, light_off_hour, light_off_minute))
 
 try:
     # 메인 루프
@@ -151,8 +192,15 @@ try:
             recording_active = not recording_active
             
             if recording_active:
-                print("기록과 네오픽셀이 시작되었습니다.")
-                np_on()               # 네오픽셀 켜기
+                print("기록이 시작되었습니다.")
+                # LED 상태를 시간에 따라 설정
+                if is_light_on_time():
+                    np_on()  # 네오픽셀 켜기
+                    print("네오픽셀이 켜졌습니다 (LED 켜는 시간대)")
+                else:
+                    np_standby()  # 네오픽셀 대기 모드
+                    print("네오픽셀이 대기 모드입니다 (LED 끄는 시간대)")
+                
                 button_buzzer(2000)   # 시작 부저음 (높은 음)
                 
                 # 파일 열기
@@ -183,9 +231,21 @@ try:
             button_pressed = False  # 버튼 상태 초기화
             time.sleep(0.2)         # 디바운스 (버튼 신호 안정화)
         
-        # 2. 기록이 활성화된 경우에만 데이터 측정 및 저장
+        # 2. 기록이 활성화된 경우 데이터 측정 및 저장, LED 상태 업데이트
         if recording_active:
+            # 데이터 기록
             record_data()
+            
+            # 5초마다 시간에 따라 LED 상태 업데이트
+            current_time = time.time()
+            if current_time - last_light_check >= 5:
+                if is_light_on_time():
+                    # LED 켜는 시간 - LED 끄는 시간 사이면 모든 LED 켜기
+                    np_on()
+                else:
+                    # 그 외 시간은 대기 모드 (첫 LED만 빨간색)
+                    np_standby()
+                last_light_check = current_time
         
         time.sleep(1)  # 1초 대기
 
